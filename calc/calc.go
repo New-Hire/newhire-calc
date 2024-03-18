@@ -1,7 +1,8 @@
-package hire
+package calc
 
 import (
 	log "github.com/sirupsen/logrus"
+	"newhire-rate/model"
 	"slices"
 )
 
@@ -17,8 +18,8 @@ const (
 /**
  * Deep越深,权重加权越大
  */
-func calcWeightDeep(aaa2 []Aaaa2) int {
-	maxDeep := slices.MaxFunc(aaa2, func(a, b Aaaa2) int {
+func CalcWeightDeep(aaa2 []model.Aaaa2) int {
+	maxDeep := slices.MaxFunc(aaa2, func(a, b model.Aaaa2) int {
 		if a.Deep > b.Deep {
 			return 1
 		} else if a.Deep < b.Deep {
@@ -35,8 +36,8 @@ func calcWeightDeep(aaa2 []Aaaa2) int {
 	return w
 }
 
-func groupByUserIdWhereDeep(students []Aaaa2, deep int8) map[int64][]Aaaa2 {
-	groups := make(map[int64][]Aaaa2)
+func groupByUserIdWhereDeep(students []model.Aaaa2, deep int8) map[int64][]model.Aaaa2 {
+	groups := make(map[int64][]model.Aaaa2)
 	for _, student := range students {
 		if deep == student.Deep {
 			groups[student.UserId] = append(groups[student.UserId], student)
@@ -45,21 +46,7 @@ func groupByUserIdWhereDeep(students []Aaaa2, deep int8) map[int64][]Aaaa2 {
 	return groups
 }
 
-/**
- * 计算基础得分
- * 基础分只算直接打分
- */
-func calcBasicScore(aaa2 []Aaaa2, userI int64) int {
-	maxDeep := slices.MaxFunc(aaa2, func(a, b Aaaa2) int {
-		if a.Deep > b.Deep {
-			return 1
-		} else if a.Deep < b.Deep {
-			return -1
-		}
-		return 0
-	}).Deep
-
-	m := make(map[int64]int)
+func sssss(aaa2 []model.Aaaa2, maxDeep int8, m map[int64]int) {
 	for i := maxDeep; i > 0; i-- {
 		log.Debug("deep=", i)
 		vv := groupByUserIdWhereDeep(aaa2, i)
@@ -108,7 +95,26 @@ func calcBasicScore(aaa2 []Aaaa2, userI int64) int {
 			log.Debug("m=", m)
 		}
 	}
-	return m[userI]
+}
+
+/**
+ * 计算基础得分
+ * 基础分只算直接打分
+ */
+func CalcBasicScore(aaa2 []model.Aaaa2, userI int64) map[int64]int {
+	maxDeep := slices.MaxFunc(aaa2, func(a, b model.Aaaa2) int {
+		if a.Deep > b.Deep {
+			return 1
+		} else if a.Deep < b.Deep {
+			return -1
+		}
+		return 0
+	}).Deep
+
+	m := make(map[int64]int)
+	sssss(aaa2, maxDeep, m)
+	sssss(aaa2, maxDeep, m)
+	return m
 }
 
 ///**

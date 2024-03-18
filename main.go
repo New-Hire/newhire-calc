@@ -1,4 +1,4 @@
-package hire
+package main
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"newhire-rate/calc"
 	"newhire-rate/model"
 	"os"
 )
@@ -21,6 +23,9 @@ func init() {
 }
 
 func main() {
+	calc.Consumer()
+	panic("ssss")
+
 	fmt.Println("start")
 	dsn := "root:123456@tcp(127.0.0.1:3306)/hire?charset=utf8mb4&parseTime=True&loc=Local"
 	db, err := connectToDatabase(dsn)
@@ -35,40 +40,32 @@ func main() {
 	dgraphClient := createDgraphClient()
 	sdsd := runDgraphTxn(dgraphClient)
 	//runDgraphTxn2(dgraphClient)
-	calcBasicScore(sdsd, 1)
+	m := calc.CalcBasicScore(sdsd, 1)
+
+	for userId, v := range m {
+		var dddaa model.UserScore
+		dddaa.UserId = userId
+		dddaa.Score = v
+		db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{"score": v}),
+		}).Create(&dddaa)
+	}
 }
 
 /**
  * Deep越深,权重加权越大,比如1-10为0.3，1-3为0.1
  */
-func calcScore(aaa2 []Aaaa2) {
-	deepW := calcWeightDeep(aaa2)
+func calcScore(aaa2 []model.Aaaa2) {
+	deepW := calc.CalcWeightDeep(aaa2)
 	fmt.Printf("%d", deepW)
 }
 
 type AaaaData struct {
-	Data []Aaaa `json:"data"`
+	Data []model.Aaaa `json:"data"`
 }
 
-type Aaaa struct {
-	UserId    int64
-	CompanyId int64
-	Raters    []Aaaa
-	Score1    int `json:"score1,omitempty"`
-	Score2    int `json:"score2,omitempty"`
-}
-
-type Aaaa2 struct {
-	RaterId        int64
-	UserId         int64
-	Deep           int8
-	RaterCompanyId int64
-	UserCompanyId  int64
-	Score1         int
-	Score2         int
-}
-
-func runDgraphTxn(c *dgo.Dgraph) []Aaaa2 {
+func runDgraphTxn(c *dgo.Dgraph) []model.Aaaa2 {
 	txn := c.NewTxn()
 	ctx := context.Background()
 
@@ -90,7 +87,7 @@ func runDgraphTxn(c *dgo.Dgraph) []Aaaa2 {
 	if err2 != nil {
 		log.Fatal(err2)
 	}
-	aaa := &[]Aaaa2{}
+	aaa := &[]model.Aaaa2{}
 	model := p.Data[0]
 	userId := model.UserId
 	//companyId := model.CompanyId
@@ -120,21 +117,21 @@ func runDgraphTxn(c *dgo.Dgraph) []Aaaa2 {
 //	if err2 != nil {
 //		log.Fatal(err2)
 //	}
-//	var aaa []Aaaa2
+//	var aaa []model.Aaaa2
 //	model := p.Data[0]
 //	userId := model.UserId
 //	//companyId := model.CompanyId
 //	resolveRaters2(userId, model.Raters, aaa, 0)
 //}
 
-func resolveRaters(userId int64, raters []Aaaa, aaa *[]Aaaa2, deep int8) {
+func resolveRaters(userId int64, raters []model.Aaaa, aaa *[]model.Aaaa2, deep int8) {
 	deep++
 	for i := 0; i < len(raters); i++ {
 		rater := raters[i]
 		if rater.Raters != nil {
 			resolveRaters(rater.UserId, rater.Raters, aaa, deep)
 		}
-		aa := Aaaa2{
+		aa := model.Aaaa2{
 			RaterId:        rater.UserId,
 			UserId:         userId,
 			Deep:           deep,
@@ -148,14 +145,14 @@ func resolveRaters(userId int64, raters []Aaaa, aaa *[]Aaaa2, deep int8) {
 	}
 }
 
-//func resolveRaters2(userId int64, raters []Aaaa, aaa []Aaaa2, deep int8) {
+//func resolveRaters2(userId int64, raters []Aaaa, aaa []model.Aaaa2, deep int8) {
 //	deep++
 //	for i := 0; i < len(raters); i++ {
 //		rater := raters[i]
 //		if rater.Raters != nil {
 //			resolveRaters(rater.UserId, rater.Raters, aaa, deep)
 //		}
-//		aa := Aaaa2{
+//		aa := model.Aaaa2{
 //			RaterId:        userId,
 //			UserId:         rater.UserId,
 //			Deep:           deep,
