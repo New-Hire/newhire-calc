@@ -6,11 +6,17 @@ import (
 	"testing"
 )
 
-// 测试大数据集 3.58s
+const (
+	MaxNodeCount = 1000000
+	MaxUserCount = 1000000
+	MaxDeep      = 60
+)
+
+// 测试大数据集
 func BenchmarkHigh(b *testing.B) {
-	var aaa2 []model.Aaaa2
-	for i := 1; i < 10000000; i++ {
-		d := model.Aaaa2{
+	var nodes []model.Node
+	for i := 1; i < MaxNodeCount; i++ {
+		d := model.Node{
 			RaterId:        rand.Int63n(100) + 1,
 			UserId:         rand.Int63n(100) + 1,
 			Deep:           int8(rand.Intn(16)) + 1,
@@ -19,63 +25,63 @@ func BenchmarkHigh(b *testing.B) {
 			Score1:         rand.Intn(10) + 1,
 			Score2:         4,
 		}
-		aaa2 = append(aaa2, d)
+		nodes = append(nodes, d)
 	}
-	CalcBasicScore(aaa2, 1)
+	_, _ = Calc(nodes)
 }
 
-// 测试大数据集+大用户数 9.49s
+// 测试大数据集+大用户数
 func BenchmarkHigh2(b *testing.B) {
-	var aaa2 []model.Aaaa2
-	for i := 1; i < 10000000; i++ {
-		d := model.Aaaa2{
-			RaterId:        rand.Int63n(1000000) + 1,
-			UserId:         rand.Int63n(1000000) + 1,
+	var nodes []model.Node
+	for i := 1; i < MaxNodeCount; i++ {
+		d := model.Node{
+			RaterId:        rand.Int63n(MaxUserCount) + 1,
+			UserId:         rand.Int63n(MaxUserCount) + 1,
 			Deep:           int8(rand.Intn(16)) + 1,
 			RaterCompanyId: 1,
 			UserCompanyId:  1,
 			Score1:         rand.Intn(10) + 1,
 			Score2:         4,
 		}
-		aaa2 = append(aaa2, d)
+		nodes = append(nodes, d)
 	}
-	CalcBasicScore(aaa2, 1)
+	_, _ = Calc(nodes)
 }
 
-// 测试大数据集+大复杂深度 8.27s
+// 测试大数据集+大复杂深度
 func BenchmarkHigh3(b *testing.B) {
-	var aaa2 []model.Aaaa2
-	for i := 1; i < 10000000; i++ {
-		d := model.Aaaa2{
+	var nodes []model.Node
+	for i := 1; i < MaxNodeCount; i++ {
+		d := model.Node{
 			RaterId:        rand.Int63n(100) + 1,
 			UserId:         rand.Int63n(100) + 1,
-			Deep:           int8(rand.Intn(160)) + 1,
+			Deep:           int8(rand.Intn(MaxDeep)) + 1,
 			RaterCompanyId: 1,
 			UserCompanyId:  1,
 			Score1:         rand.Intn(10) + 1,
 			Score2:         4,
 		}
-		aaa2 = append(aaa2, d)
+		nodes = append(nodes, d)
 	}
 
-	CalcBasicScore(aaa2, 1)
+	_, _ = Calc(nodes)
 }
 
-// 测试大数据集+大用户数+大复杂深度 13.16s
+// 测试大数据集+大用户数+大复杂深度
 func BenchmarkHigh4(b *testing.B) {
-	var aaa2 []model.Aaaa2
-	for i := 1; i < 10000000; i++ {
-		d := model.Aaaa2{
-			RaterId:        rand.Int63n(1000000) + 1,
-			UserId:         rand.Int63n(1000000) + 1,
-			Deep:           int8(rand.Intn(160)) + 1,
+	var nodes []model.Node
+	for i := 1; i < MaxNodeCount; i++ {
+		d := model.Node{
+			RaterId:        rand.Int63n(MaxUserCount) + 1,
+			UserId:         rand.Int63n(MaxUserCount) + 1,
+			Deep:           int8(rand.Intn(MaxDeep)) + 1,
 			RaterCompanyId: 1,
 			UserCompanyId:  1,
 			Score1:         rand.Intn(10) + 1,
 			Score2:         4,
 		}
-		aaa2 = append(aaa2, d)
+		nodes = append(nodes, d)
 	}
 
-	CalcBasicScore(aaa2, 1)
+	_, _ = Calc(nodes)
 }

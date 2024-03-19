@@ -1,4 +1,4 @@
-package calc
+package main
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	Topic         = "newhire"
-	ConsumerGroup = "HIRENEW"
+	Topic         = "test"
+	ConsumerGroup = "TEST"
 	Endpoint      = "localhost:8080"
 	AccessKey     = ""
 	SecretKey     = ""
@@ -29,11 +29,12 @@ var (
 	// receive messages in a loop
 )
 
-func Consumer() {
-	// log to console
-	os.Setenv("mq.consoleAppender.enabled", "true")
+func consumer(method func(body string)) {
+	err := os.Setenv("mq.consoleAppender.enabled", "true")
+	if err != nil {
+		panic("[MQ] 设置环境变量异常")
+	}
 	rmqClient.ResetLogger()
-	// In most case, you don't need to create many consumers, singleton pattern is more recommended.
 	simpleConsumer, err := rmqClient.NewSimpleConsumer(&rmqClient.Config{
 		Endpoint:      Endpoint,
 		ConsumerGroup: ConsumerGroup,
@@ -55,29 +56,31 @@ func Consumer() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer simpleConsumer.GracefulStop()
 
-	go func() {
-		for {
-			fmt.Println("start receive message")
-			mvs, err := simpleConsumer.Receive(context.TODO(), maxMessageNum, invisibleDuration)
+	defer func(simpleConsumer rmqClient.SimpleConsumer) {
+		err := simpleConsumer.GracefulStop()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(simpleConsumer)
+
+	for {
+		fmt.Println("开始新一轮消息接收")
+		mvs, err := simpleConsumer.Receive(context.TODO(), maxMessageNum, invisibleDuration)
+		if err != nil {
+			fmt.Println(err)
+		}
+		for _, mv := range mvs {
+			err := simpleConsumer.Ack(context.TODO(), mv)
 			if err != nil {
 				fmt.Println(err)
+				return
 			}
-			for _, mv := range mvs {
-				err := simpleConsumer.Ack(context.TODO(), mv)
-				if err != nil {
-					fmt.Println(err)
-					return
-				}
-				fmt.Println(mv)
-				fmt.Println(string(mv.GetBody()))
-			}
-			fmt.Println("wait a moment")
-			fmt.Println()
-			time.Sleep(time.Second * 3)
+			fmt.Println(mv)
+			method(string(mv.GetBody()))
 		}
-	}()
-	// run for a while
-	time.Sleep(time.Minute)
+		// TODO: 配置化秒数
+		fmt.Println("等待2秒继续接收")
+		time.Sleep(time.Second * 2)
+	}
 }

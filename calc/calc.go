@@ -1,25 +1,30 @@
 package calc
 
 import (
+	"errors"
 	log "github.com/sirupsen/logrus"
+	"math"
 	"newhire-rate/model"
+	"os"
 	"slices"
 )
 
+func init() {
+	// TODO: 环境切换格式
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.ErrorLevel)
+}
+
 const (
-	Score1Weight = 200
-	Score2Weight = 100
-	Decimal      = 10000
+	MinDeep int8 = 1
 )
 
-// 时间越近，权重越大
-// 核心是自上往下计算，将上层能量传递给下层，层层相叠
-
-/**
- * Deep越深,权重加权越大
- */
-func CalcWeightDeep(aaa2 []model.Aaaa2) int {
-	maxDeep := slices.MaxFunc(aaa2, func(a, b model.Aaaa2) int {
+func Calc(nodes []model.Node) (map[int64]float64, error) {
+	if nodes == nil || len(nodes) == 0 {
+		return nil, errors.New("空节点，无法计算")
+	}
+	maxDeep := slices.MaxFunc(nodes, func(a, b model.Node) int {
 		if a.Deep > b.Deep {
 			return 1
 		} else if a.Deep < b.Deep {
@@ -27,103 +32,159 @@ func CalcWeightDeep(aaa2 []model.Aaaa2) int {
 		}
 		return 0
 	}).Deep
-	const MinDeep int8 = 1
-	// TODO: 单测 同层级
-	w := int(maxDeep-MinDeep) * 100
-	log.WithFields(log.Fields{
-		"deepWeight": w,
-	}).Debug("权重计算")
-	return w
+
+	m := make(map[int64]float64)
+	// 评分离散，越接近0代表所有评分集中，反之代表争议很大
+	m2 := make(map[int64]float64)
+	// 评分者个人对集体的离散，越接近0代表此人评分越从众，反之代表与他人有很大不同
+	m3 := make(map[int64]float64)
+	upCalc(nodes, maxDeep, m2, m3)
+	downCalc(nodes, maxDeep, m, m2, m3)
+	return m, nil
 }
 
-func groupByUserIdWhereDeep(students []model.Aaaa2, deep int8) map[int64][]model.Aaaa2 {
-	groups := make(map[int64][]model.Aaaa2)
-	for _, student := range students {
-		if deep == student.Deep {
-			groups[student.UserId] = append(groups[student.UserId], student)
+func groupByUserIdWhereDeep(nodes []model.Node, deep int8) map[int64][]model.Node {
+	groups := make(map[int64][]model.Node)
+	for _, node := range nodes {
+		if deep == node.Deep {
+			groups[node.UserId] = append(groups[node.UserId], node)
 		}
 	}
 	return groups
 }
 
-func sssss(aaa2 []model.Aaaa2, maxDeep int8, m map[int64]int) {
-	for i := maxDeep; i > 0; i-- {
-		log.Debug("deep=", i)
-		vv := groupByUserIdWhereDeep(aaa2, i)
-		//log.Debug("vv.count=", len(vv))
-		for userId, value := range vv {
-			//log.Debug("value.count=", len(value))
-			//ucount := len(value)
-			s := 0
+// 计算节点权重
+func calcNodeWeight(node model.Node, nodeScoreMap *map[int64]float64) float64 {
+	scoreMap := *nodeScoreMap
+	raterScore := scoreMap[node.RaterId]
+	if raterScore > 0 {
+		return raterScore
+	} else {
+		// 顶节点的默认分
+		return 5
+	}
+}
 
-			uuuu := 0
-			for _, dd := range value {
-				ssdd := m[dd.RaterId]
-				if ssdd > 0 {
-					uuuu += ssdd / 10 // 向下取整
-				} else {
-					uuuu += 5 * Decimal / 10 // 向下取整
+// 计算来自上级节点传递的能量分
+func calcNodeIncrScore(node model.Node, nodeScoreMap *map[int64]float64, nodeWeight float64) float64 {
+	scoreMap := *nodeScoreMap
+	raterScore := scoreMap[node.RaterId]
+	if raterScore == 0 {
+		// 顶节点给予默认分5
+		raterScore = 5
+	}
+	log.Debug("raterScore=", raterScore)
+	incrScore := raterScore * nodeWeight / 10
+	log.Debug("incrScore=", incrScore)
+	return incrScore
+}
+
+// 往下计算
+func downCalc(nodes []model.Node, maxDeep int8, nodeScoreMap map[int64]float64, nodeDMap map[int64]float64, dMap map[int64]float64) {
+	for currDeep := maxDeep; currDeep > 0; currDeep-- {
+		log.Debug("-----------DOWN-DOWN-DOWN-DOWN-------------")
+		log.Debug("currDeep=", currDeep)
+		nodesGroup := groupByUserIdWhereDeep(nodes, currDeep)
+		log.Debug("len(nodesGroup)=", len(nodesGroup))
+		for userId, nodes := range nodesGroup {
+			log.Debug("userId=", userId)
+			log.Debug("nodes.count=", len(nodes))
+
+			/**
+			 * 形如 a / (a + b) 中的 (a+b)，用以取权重总和，方便计算动态权重
+			 */
+			var weightSum float64 = 0
+			for _, node := range nodes {
+				log.Debugf("node=%+v", node)
+				weightSum += calcNodeWeight(node, &nodeScoreMap)
+			}
+			log.Debug("总权重=", weightSum)
+
+			totalScore := 0.0
+
+			// 确保 for nodes 是顺序的
+			for _, node := range nodes {
+				nodeWeight := calcNodeWeight(node, &nodeScoreMap) / weightSum
+				log.Debug("node.RaterId=", node.RaterId)
+				log.Debug("nodeWeight=", nodeWeight)
+				nodeScore := float64(node.Score1) * nodeWeight
+				totalScore += nodeScore
+				log.Debug("nodeScore=", nodeScore)
+
+				incrScore := calcNodeIncrScore(node, &nodeScoreMap, nodeWeight)
+				log.Debug("incrScore=", incrScore)
+				totalScore += incrScore
+
+				// 识人之能
+				if nodeDMap[node.UserId] > 0 {
+					coeff2 := 1.0 / nodeDMap[node.UserId]
+					log.Debug("coeff2=", coeff2)
+					totalScore += 0.8 * coeff2
 				}
 			}
 
-			for _, dd := range value {
-				//log.Debug("dd=", dd)
-				ssdd := m[dd.RaterId]
-				log.Debug("userId=", dd.RaterId, "->", dd.UserId)
-
-				u1 := 0
-				if ssdd > 0 {
-					u1 = ssdd * Decimal / (uuuu * 10) // 向下取整
-				} else {
-					u1 = 5 * Decimal * Decimal / (uuuu * 10) // 向下取整
-				}
-				log.Debug("u1=", u1)
-				log.Debug("uuuu=", uuuu)
-
-				s += dd.Score1 * u1
-				if ssdd > 0 {
-					s += ssdd * u1 / (Decimal * 100)
-					log.Debug("p=", ssdd*u1/(Decimal*100))
-				} else {
-					log.Debug("p=", ssdd)
-				}
-				//log.Debug("u1=", u1)
+			// dMap越接近0，代表争议越小
+			if dMap[userId] > 0 {
+				coeff1 := 1.0 / dMap[userId]
+				log.Debug("coeff1=", coeff1)
+				// 争议附加分
+				totalScore += 0.5 * coeff1
 			}
-			log.Debug("s=", s)
-			m[userId] = s
-			log.Debug("---------------------------")
-			log.Debug("m=", m)
+
+			nodeScoreMap[userId] = totalScore
+			log.Debug("totalScore=", totalScore)
+			log.Debugf("map=%+v", nodeScoreMap)
 		}
 	}
 }
 
-/**
- * 计算基础得分
- * 基础分只算直接打分
- */
-func CalcBasicScore(aaa2 []model.Aaaa2, userI int64) map[int64]int {
-	maxDeep := slices.MaxFunc(aaa2, func(a, b model.Aaaa2) int {
-		if a.Deep > b.Deep {
-			return 1
-		} else if a.Deep < b.Deep {
-			return -1
+// 往上计算
+func upCalc(nodes []model.Node, maxDeep int8, nodeDMap map[int64]float64, dMap map[int64]float64) {
+	for currDeep := MinDeep; currDeep <= maxDeep; currDeep++ {
+		log.Debug("-----------UP-UP-UP-UP-------------")
+		log.Debug("currDeep=", currDeep)
+		nodesGroup := groupByUserIdWhereDeep(nodes, currDeep)
+		log.Debug("len(nodesGroup)=", len(nodesGroup))
+		for userId, nodes := range nodesGroup {
+			log.Debug("userId=", userId)
+			log.Debug("nodes.count=", len(nodes))
+
+			if len(nodes) <= 1 {
+				log.Debug("节点无多人评分，Skip...")
+				continue
+			}
+
+			var scores []int
+			for _, node := range nodes {
+				scores = append(scores, node.Score1)
+			}
+			log.Debugln("scores=", scores)
+
+			arrD := calcArrDiscrepancy(scores)
+			dMap[userId] = arrD
+			log.Debugln("评分离散=", arrD)
+
+			// 根据被评者的评分离散，为评分者附加额外离散，表达 评分者 被 被评人 影响
+			var appendD float64 = 0
+			if nodeDMap[userId] > 0 {
+				appendD = math.Sqrt(nodeDMap[userId] / 2)
+			}
+			log.Debugln("追加离散", appendD)
+
+			// 确保 for nodes 是顺序的
+			for _, node := range nodes {
+				// 计算此人评分从众程度(离散程度)
+				d, err := calcDiscrepancy2(float64(node.Score1), scores, arrD)
+				if err != nil {
+					// 即使错误也不能影响后续计算
+					log.Fatal(err)
+				}
+				log.Debug("node.RaterId=", node.RaterId)
+				log.Debug("原始d=", d)
+				log.Debug("最终d=", d+appendD)
+				nodeDMap[node.RaterId] = d + appendD
+				log.Debugln("评分者个人对集体的离散", nodeDMap)
+			}
 		}
-		return 0
-	}).Deep
-
-	m := make(map[int64]int)
-	sssss(aaa2, maxDeep, m)
-	sssss(aaa2, maxDeep, m)
-	return m
+	}
 }
-
-///**
-// * 计算基础得分
-// */
-//func calcBasicScore(aaa2 []Aaaa2, deepWeight int) int {
-//	for _, a2 := range aaa2 {
-//		deepCoeff := int(a2.Deep) * deepWeight
-//		s1 := deepCoeff * a2.Score1 * Score1Weight
-//		s2 := deepCoeff * a2.Score2 * Score2Weight
-//	}
-//}

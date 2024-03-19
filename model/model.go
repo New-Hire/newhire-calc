@@ -1,14 +1,14 @@
 package model
 
-type Aaaa struct {
+type User struct {
 	UserId    int64
 	CompanyId int64
-	Raters    []Aaaa
+	Raters    []User
 	Score1    int `json:"score1,omitempty"`
 	Score2    int `json:"score2,omitempty"`
 }
 
-type Aaaa2 struct {
+type Node struct {
 	RaterId        int64
 	UserId         int64
 	Deep           int8
